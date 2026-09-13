@@ -6,7 +6,9 @@ import requests
 from google import genai
 from google.genai import types
 
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1548670048107892789/jC0ZzBWmwQ3kzVV25F0QbiaAd_gEd6OyO7vJLKPUjaTKrz78pEeSPnXij5rEIqoeWorr"
+DISCORD_WEBHOOK_URL = (
+    "https://discord.com/api/webhooks/1548670048107892789/jC0ZzBWmwQ3kzVV25F0QbiaAd_gEd6OyO7vJLKPUjaTKrz78pEeSPnXij5rEIqoeWorr"
+)
 
 # Inicijuojame Gemini klientą su API raktu iš GitHub Secrets
 gemini_api_key = os.environ.get("GEMINI_API_KEY")
@@ -101,7 +103,7 @@ def is_valid_book_cover_with_ai(image_url, query_title):
     )
 
     response = gemini_client.models.generate_content(
-        model="gemini-1.5-flash",
+        model="gemini-2.5-flash",
         contents=[
             types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
             prompt,
@@ -182,7 +184,6 @@ def is_invalid_book_item(item):
   description = str(item.get("description", "")).lower()
   full_text = f"{title} {description}"
 
-  # Atmesti ne knygų daiktus (figūrėlės, plakatai, drabužiai ir t.t.)
   non_book_keywords = [
       "figurėlė", "figure", "figūra", "funko", "pop!", "plakatas", "poster", 
       "marškinėliai", "t-shirt", "hoodie", "džemperis", "lipdukas", "sticker", 
@@ -278,7 +279,6 @@ def check_vinted():
           seen_ids.add(item_id)
           continue
 
-        # AI viršelio patikrinimas čia:
         photos = item.get("photos", [])
         photo_url = photos[0].get("url") if photos else None
         if not photo_url or not is_valid_book_cover_with_ai(photo_url, query):
