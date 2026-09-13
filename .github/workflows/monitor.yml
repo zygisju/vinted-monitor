@@ -39,16 +39,23 @@ jobs:
       - name: Commit and push changes
         run: |
           # Check if there are changes
-          if ! git diff --quiet; then
-            git add seen_items.json
-            git commit -m "Update seen items cache"
-            
-            # Pull with rebase and force push if needed
-            git fetch origin main
-            git rebase origin/main || git rebase --abort
-            
-            # Use force push with lease for safety
-            git push --force-with-lease origin main
-          else
+          if git diff --quiet; then
             echo "No changes to commit"
+            exit 0
           fi
+          
+          git add seen_items.json
+          git commit -m "Update seen items cache"
+          
+          # Fetch latest changes from remote
+          git fetch origin main
+          
+          # Try to rebase, if it fails, abort and use manual merge
+          if ! git rebase origin/main; then
+            echo "Rebase failed, aborting..."
+            git rebase --abort
+            git merge origin/main -m "Merge remote changes"
+          fi
+          
+          # Push changes
+          git push origin main
