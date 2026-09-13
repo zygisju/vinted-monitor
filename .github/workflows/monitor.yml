@@ -38,11 +38,17 @@ jobs:
 
       - name: Commit and push changes
         run: |
-          if git diff --quiet; then
-            echo "No changes to commit"
-          else
+          # Check if there are changes
+          if ! git diff --quiet; then
             git add seen_items.json
             git commit -m "Update seen items cache"
-            git pull --rebase origin main || true
-            git push origin main
+            
+            # Pull with rebase and force push if needed
+            git fetch origin main
+            git rebase origin/main || git rebase --abort
+            
+            # Use force push with lease for safety
+            git push --force-with-lease origin main
+          else
+            echo "No changes to commit"
           fi
