@@ -4,10 +4,8 @@ import random
 import time
 import requests
 
-# Įrašyk savo Discord Webhook URL čia:
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1548670048107892789/jC0ZzBWmwQ3kzVV25F0QbiaAd_gEd6OyO7vJLKPUjaTKrz78pEeSPnXij5rEIqoeWorr"
 
-# Autoriai / pagrindiniai raktažodžiai
 AUTHORS = [
     "Freida McFadden",
     "Chris Carter",
@@ -23,7 +21,6 @@ AUTHORS = [
     "Hanna Grace",
 ]
 
-# Atskiros knygos / pavadinimai
 BOOKS = [
     "The Witch",
     "Brain Damage",
@@ -111,43 +108,47 @@ def is_bundle(title):
   return any(kw in t_lower for kw in bundle_keywords)
 
 
-def is_polish_content(item):
-  title = str(item.get("title", "")).lower()
-  description = str(item.get("description", "")).lower()
-  full_text = f"{title} {description}"
-
-  # Patikriname Vinted API kalbos lauką arba atributus
-  item_language = str(item.get("language", "")).lower()
-  if "pl" in item_language or "polish" in item_language:
+def is_polish_language(item):
+  # 1. Tikriname API laukus jei nurodyta kalba
+  lang = str(item.get("language", "")).lower()
+  if "pl" in lang or "polish" in lang:
     return True
 
+  # 2. Tikriname prekės atributus (Vinted dažnai deda kalbos atributą)
   attributes = item.get("attributes", [])
   if isinstance(attributes, list):
     for attr in attributes:
       code = str(attr.get("code", "")).lower()
       value = str(attr.get("value", "")).lower()
-      if "lang" in code and ("pl" in value or "polish" in value or "lenk" in value):
-        return True
+      title_attr = str(attr.get("title", "")).lower()
+      if any(k in code or k in title_attr for k in ["lang", "kalba", "język"]):
+        if any(p in value for p in ["pl", "polish", "lenkų"]):
+          return True
 
-  # Papildomi tipiniai lenkiški žodžiai ir galūnės (kadangi lenkų kalboje gausu spec. raidžių: ą, ć, ę, ł, ń, ó, ś, ź, ż)
-  polish_words = [
-      "język polski",
-      "po polsku",
+  title = str(item.get("title", "")).lower()
+  description = str(item.get("description", "")).lower()
+  full_text = f"{title} {description}"
+
+  # 3. Tikriname specifinius lenkiškus knygų/apdailos terminus
+  polish_phrases = [
       "wydawnictwo",
       "miękka oprawa",
       "twarda oprawa",
+      "sprzedam książ",
       "stan idealny",
       "stan bardzo dobry",
       "stron:",
       "autor:",
-      "sprzedam",
-      "książka",
-      "książki",
-      "stan książki",
-      "wysyłka",
+      "po polsku",
+      "język polski",
       "okładka",
+      "seria ",
   ]
-  if any(w in full_text for w in polish_words):
+  if any(phrase in full_text for phrase in polish_phrases):
+    return True
+
+  # 4. Jeigu pavadinime yra "seria" (pvz. "Seria Twisted") arba akivaizdžiai lenkiški pavadinimo žodžiai
+  if "seria " in title:
     return True
 
   return False
@@ -177,7 +178,12 @@ def check_vinted():
 
   for query in queries:
     url = "https://www.vinted.lt/api/v2/catalog/items"
-    params = {"search_text": query, "per_page": 20, "order": "newest_first"}
+    params = {
+        "search_text": query,
+        "per_page": 20,
+        "order": "newest_first",
+        "catalog_ids": "117",  # Tik knygų katalogas
+    }
 
     try:
       resp = session.get(url, headers=headers, params=params, timeout=10)
@@ -192,20 +198,8 @@ def check_vinted():
         if not item_id or item_id in seen_ids:
           continue
 
-        # Atmetame Suomiją 'FI'
-        user_data = item.get("user")
-        country_code = None
-        if isinstance(user_data, dict):
-          country_code = user_data.get("countryIsoCode")
-        if not country_code:
-          country_code = item.get("country_code")
-
-        if country_code == "FI":
-          seen_ids.add(item_id)
-          continue
-
-        # Jei lenkiškas turinys / kalba – ignoruojame
-        if is_polish_content(item):
+        # Atmetame tik lenkų kalbą, patį regioną (PL) paliekame ramybėje
+        if is_polish_language(item):
           seen_ids.add(item_id)
           continue
 
@@ -223,8 +217,7 @@ def check_vinted():
           send_discord_notification(item)
           print(f"Rasta ir išsiųsta: {title} ({price} EUR)")
 
-        seen_id_str = str(item_id)
-        seen_ids.add(seen_id_str)
+        seen_ids.add(item_id)
 
       time.sleep(random.uniform(1.5, 3.0))
 
