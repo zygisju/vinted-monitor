@@ -17,6 +17,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Pull latest changes
+        run: |
+          git pull --rebase origin main
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -29,10 +33,6 @@ jobs:
       - name: Run script
         run: |
           python vinted_monitor.py
-
-      - name: Pull latest changes
-        run: |
-          git pull --rebase origin main
 
       - name: Commit and push seen items
         uses: stefanzweifel/git-auto-commit-action@v5
