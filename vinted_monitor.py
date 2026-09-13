@@ -72,7 +72,7 @@ def save_seen_ids(seen_ids):
 
 
 def is_valid_book_cover_with_ai(image_url, query_title):
-  """Patikrina per Gemini AI, ar nuotraukoje tikrai fizinė knyga."""
+  """Patikrina per Gemini AI, ar nuotraukoje tikrai fizinė knyga ir ar ji nėra lenkiška."""
   if not gemini_client or not image_url:
     return True  # Jei nėra API rakto, praleidžiame be stabdymo
 
@@ -80,8 +80,11 @@ def is_valid_book_cover_with_ai(image_url, query_title):
       f"Tu esi asistentas, kuris filtruoja Vinted skelbimus. "
       f"Ieškoma knyga arba autorius: '{query_title}'. "
       f"Pažiūrėk į šią nuotrauką pagal nuorodą: {image_url}. "
-      f"Atsakyk TIK žodžiu 'TAIP', jei nuotraukoje matoma fizinė knyga (ne figūrėlė, ne žaislas, ne drabužis, ne plakatas) "
-      f"ir ji atitinka paiešką. Jei tai figūrėlė, žaislas ar akivaizdžiai ne knyga – atsakyk TIK žodžiu 'NE'."
+      f"Tavo užduotis yra dvejopa: "
+      f"1. Įsitikinti, kad nuotraukoje matoma fizinė knyga (ne figūrėlė, ne žaislas, ne drabužis, ne plakatas). "
+      f"2. Perskaityti ant knygos viršelio esantį tekstą. Tinka tik angliškos arba lietuviškos knygos. Jei ant viršelio matomas lenkiškas tekstas (pvz., pavadinimas išverstas į lenkų kalbą), knygą reikia atmesti. "
+      f"Atsakyk TIK žodžiu 'TAIP', jei tai yra tikra knyga ir ant jos viršelio NĖRA lenkiško teksto. "
+      f"Atsakyk TIK žodžiu 'NE', jei tai ne knyga ARBA jei tekstas ant viršelio yra bent iš dalies lenkiškas."
   )
 
   try:
@@ -251,7 +254,7 @@ def check_vinted():
         photos = item.get("photos", [])
         photo_url = photos[0].get("url") if photos else None
         if photo_url and not is_valid_book_cover_with_ai(photo_url, query):
-          print(f"AI atmetė (ne knyga): {item.get('title')}")
+          print(f"AI atmetė (ne knyga arba lenkiška): {item.get('title')}")
           seen_ids.add(item_id)
           continue
 
