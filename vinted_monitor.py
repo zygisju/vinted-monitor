@@ -74,24 +74,27 @@ def save_seen_ids(seen_ids):
 
 def is_valid_book_cover_with_ai(image_url, query_title):
   """Patikrina per Gemini AI, ar nuotraukoje tikrai fizinė knyga ir ar ji yra tik EN/LT kalba."""
-  if not gemini_client or not image_url:
-    return True
+  if not gemini_client:
+    print("Klaida: Gemini klientas nenustatytas (patikrink GEMINI_API_KEY).")
+    return False
+  if not image_url:
+    return False
 
   try:
     img_resp = requests.get(image_url, timeout=10)
     if img_resp.status_code != 200:
-      return True
+      return False
     img_bytes = img_resp.content
 
     prompt = (
-        f"Tu esi asistentas, kuris filtruoja Vinted skelbimus. "
+        f"Esi griežtas Vinted skelbimų moderatorius. "
         f"Ieškoma knyga arba autorius: '{query_title}'. "
-        f"Pažiūrėk į šią nuotrauką. "
-        f"Tavo užduotis yra dvejopa: "
-        f"1. Įsitikinti, kad nuotraukoje matoma fizinė knyga (ne figūrėlė, ne žaislas, ne drabužis, ne plakatas). "
-        f"2. Perskaityti ant knygos viršelio esantį tekstą ir nustatyti jo kalbą. Tinka TIK anglų arba lietuvių kalbos. Jei viršelyje matomas tekstas yra bet kokia kita kalba (suomių, lenkų, vokiečių, ispanų ir t.t.), knygą privalai atmesti. "
-        f"Atsakyk TIK žodžiu 'TAIP', jei tai yra tikra knyga ir tekstas ant jos viršelio yra TIK anglų arba lietuvių kalba. "
-        f"Atsakyk TIK žodžiu 'NE', jei tai ne knyga ARBA jei tekstas ant viršelio yra bet kokia kita kalba nei anglų ar lietuvių."
+        f"Analizuok pateiktą nuotrauką. "
+        f"Atsakyk TIK vienu žodžiu: TAIP arba NE. "
+        f"Taisyklės, kad atsakytum TAIP (atitinka visus punktus): "
+        f"1. Tai turi būti FIZINĖ KNYGA (minkštas/kietas viršelis, puslapiai). Jokiu būdu negali būti figūrėlė, žaislas, drabužis, plakatas, aksesuars ar kas nors kita. "
+        f"2. Ant knygos viršelio matomas tekstas turi būti TIK ANGLŲ arba LIETUVIŲ kalba. Jei teksto kalba yra suomių (pvz., 'Kiltin tytön murhaopas', 'Täydellinen päivä'), lenkų, vokiečių, ispanų ar bet kuri kita – atsakyk NE. "
+        f"Jei bent vienas punktas neatitinka – atsakyk NE."
     )
 
     response = gemini_client.models.generate_content(
@@ -171,6 +174,19 @@ def is_clothing_or_invalid_category(item):
 
 
 def is_invalid_book_item(item):
+  title = str(item.get("title", "")).lower()
+  description = str(item.get("description", "")).lower()
+  full_text = f"{title} {description}"
+
+  # Atmesti ne knygų daiktus (figūrėlės, plakatai, drabužiai ir t.t.)
+  non_book_keywords = [
+      "figurėlė", "figure", "figūra", "funko", "pop!", "plakatas", "poster", 
+      "marškinėliai", "t-shirt", "hoodie", "džemperis", "lipdukas", "sticker", 
+      "pakabukas", "keychain", "merch", "paveikslas"
+  ]
+  if any(kw in full_text for kw in non_book_keywords):
+    return True
+
   user_info = item.get("user", {})
   country = str(user_info.get("country_iso_code", "")).upper()
   if not country:
@@ -191,11 +207,8 @@ def is_invalid_book_item(item):
         ans = str(attr.get("answer", "")).lower()
         val = str(attr.get("value", "")).lower()
         combined_val = f"{ans} {val}"
-        if any(p in combined_val for p in ["lenkų", "lenku", "polish", "polski", "pl", "suomių"]):
+        if any(p in combined_val for p in ["lenkų", "lenku", "polish", "polski", "pl", "suomių", "finnish"]):
           return True
-
-  title = str(item.get("title", "")).lower()
-  description = str(item.get("description", "")).lower()
 
   polish_chars_in_title = ["ł", "ś", "ć", "ż", "ź", "ę", "ą", "ń"]
   if any(char in title for char in polish_chars_in_title):
@@ -264,8 +277,8 @@ def check_vinted():
         # AI viršelio patikrinimas čia:
         photos = item.get("photos", [])
         photo_url = photos[0].get("url") if photos else None
-        if photo_url and not is_valid_book_cover_with_ai(photo_url, query):
-          print(f"AI atmetė (ne knyga arba netinkama kalba): {item.get('title')}")
+        if not photo_url or not is_valid_book_cover_with_ai(photo_url, query):
+          print(f"AI arba sistema atmetė: {item.get('title')}")
           seen_ids.add(item_id)
           continue
 
