@@ -5,7 +5,7 @@ import time
 import requests
 
 # Įrašyk savo Discord Webhook URL čia:
-DISCORD_WEBHOOK_URL = "TVO_DISCORD_WEBHOOK_URL_CIA"
+DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1548670048107892789/jC0ZzBWmwQ3kzVV25F0QbiaAd_gEd6OyO7vJLKPUjaTKrz78pEeSPnXij5rEIqoeWorr"
 
 # Autoriai / pagrindiniai raktažodžiai
 AUTHORS = [
