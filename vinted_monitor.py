@@ -75,15 +75,18 @@ def save_seen_ids(seen_ids):
 def is_valid_book_cover_with_ai(image_url, query_title):
   """Patikrina per Gemini AI, ar nuotraukoje tikrai fizinė knyga ir ar ji yra tik EN/LT kalba."""
   if not gemini_client:
-    print("Klaida: Gemini klientas nenustatytas (patikrink GEMINI_API_KEY).")
-    return False
+    print("DEBUG: Nėra gemini_client!")
+    return True
   if not image_url:
-    return False
+    print("DEBUG: Nėra image_url!")
+    return True
 
   try:
-    img_resp = requests.get(image_url, timeout=10)
+    headers = {"User-Agent": "Mozilla/5.0"}
+    img_resp = requests.get(image_url, headers=headers, timeout=10)
+    print(f"DEBUG: Paveiksliuko atsisiuntimo statusas: {img_resp.status_code}")
     if img_resp.status_code != 200:
-      return False
+      return True
     img_bytes = img_resp.content
 
     prompt = (
@@ -92,24 +95,25 @@ def is_valid_book_cover_with_ai(image_url, query_title):
         f"Analizuok pateiktą nuotrauką. "
         f"Atsakyk TIK vienu žodžiu: TAIP arba NE. "
         f"Taisyklės, kad atsakytum TAIP (atitinka visus punktus): "
-        f"1. Tai turi būti FIZINĖ KNYGA (minkštas/kietas viršelis, puslapiai). Jokiu būdu negali būti figūrėlė, žaislas, drabužis, plakatas, aksesuars ar kas nors kita. "
-        f"2. Ant knygos viršelio matomas tekstas turi būti TIK ANGLŲ arba LIETUVIŲ kalba. Jei teksto kalba yra suomių (pvz., 'Kiltin tytön murhaopas', 'Täydellinen päivä'), lenkų, vokiečių, ispanų ar bet kuri kita – atsakyk NE. "
+        f"1. Tai turi būti FIZINĖ KNYGA (minkštas/kietas viršelis, puslapiai). Jokiu būdu negali būti figūrėlė, žaislas, drabužis, plakatas, aksesuaras ar kas nors kita. "
+        f"2. Ant knygos viršelio matomas tekstas turi būti TIK ANGLŲ arba LIETUVIŲ kalba. Jei teksto kalba yra suomių, lenkų, vokiečių, ispanų ar bet kuri kita – atsakyk NE. "
         f"Jei bent vienas punktas neatitinka – atsakyk NE."
     )
 
     response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-1.5-flash",
         contents=[
             types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
             prompt,
         ],
     )
     answer = response.text.strip().upper()
+    print(f"DEBUG: Gemini atsakymas gautas -> '{answer}'")
     return "TAIP" in answer
 
   except Exception as e:
     print(f"AI Vision klaida: {e}")
-    return False
+    return True  # Laikinai grąžinam True, kad matytum ar knygos praeina
 
 
 def send_discord_notification(item, item_type="knyga"):
