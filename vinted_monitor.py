@@ -100,13 +100,13 @@ def is_valid_book_cover_with_ai(image_url, query_title):
         f"Jei bent vienas punktas neatitinka – atsakyk NE."
     )
 
-    response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash",
+response = gemini_client.models.generate_content(
+        model="gemini-3.6-flash",
         contents=[
             types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
             prompt,
         ],
-    )
+)
     answer = response.text.strip().upper()
     print(f"DEBUG: Gemini atsakymas gautas -> '{answer}'")
     return "TAIP" in answer
