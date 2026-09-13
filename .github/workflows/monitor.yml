@@ -27,35 +27,25 @@ jobs:
         run: |
           pip install requests
 
-      - name: Run script
-        run: |
-          python vinted_monitor.py
-
       - name: Configure git
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
+      - name: Pull latest changes
+        run: |
+          git pull --rebase origin $(git rev-parse --abbrev-ref HEAD) || true
+
+      - name: Run script
+        run: |
+          python vinted_monitor.py
+
       - name: Commit and push changes
         run: |
-          # Check if there are changes
-          if git diff --quiet; then
+          git add seen_items.json
+          if git diff --staged --quiet; then
             echo "No changes to commit"
             exit 0
           fi
-          
-          git add seen_items.json
           git commit -m "Update seen items cache"
-          
-          # Fetch latest changes from remote
-          git fetch origin main
-          
-          # Try to rebase, if it fails, abort and use manual merge
-          if ! git rebase origin/main; then
-            echo "Rebase failed, aborting..."
-            git rebase --abort
-            git merge origin/main -m "Merge remote changes"
-          fi
-          
-          # Push changes
-          git push origin main
+          git push origin $(git rev-parse --abbrev-ref HEAD)
