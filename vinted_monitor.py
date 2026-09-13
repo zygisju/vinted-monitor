@@ -74,6 +74,7 @@ def send_discord_notification(item):
     url = item.get("url", "https://www.vinted.lt")
     user_info = item.get("user", {})
     seller_name = user_info.get("login", "Nežinomas pardavėjas")
+    country = str(user_info.get("country_iso_code", "Nežinoma")).upper()
 
     photo_url = None
     photos = item.get("photos", [])
@@ -88,7 +89,7 @@ def send_discord_notification(item):
                 "color": 3447003,
                 "fields": [
                     {"name": "Kaina", "value": f"{price_val} {currency}", "inline": True},
-                    {"name": "Pardavėjas", "value": seller_name, "inline": True},
+                    {"name": "Pardavėjas", "value": f"{seller_name} ({country})", "inline": True},
                 ],
             }
         ]
@@ -104,58 +105,74 @@ def send_discord_notification(item):
 
 def is_bundle(title):
     bundle_keywords = ["rinkinys", "komplektas", "set", "dalys", "knygų rinkinys"]
-    t_lower = title.lower()
-    return any(kw in t_lower for kw in bundle_keywords)
+    return any(kw in title.lower() for kw in bundle_keywords)
+
+
+def has_strict_keyword_match(item, query):
+    title = str(item.get("title", "")).lower()
+    desc = str(item.get("description", "")).lower()
+    brand = str(item.get("brand_title", "")).lower()
+    
+    full_text = f"{title} {desc} {brand}"
+    return query.lower() in full_text
+
+
+def is_clothing_or_invalid_category(item):
+    url = str(item.get("url", "")).lower()
+    invalid_url_keywords = ["/moterims/", "/vyrams/", "/vaikams/", "/women/", "/men/", "/kids/"]
+    if any(kw in url for kw in invalid_url_keywords):
+        return True
+    return False
 
 
 def is_invalid_item(item):
-    # 1. Griežtas Suomijos blokavimas
+    # 1. Šalių atmetimas (Suomija ir Švedija), bet Lenkija LIEKA
     user_info = item.get("user", {})
     country = str(user_info.get("country_iso_code", "")).upper()
     if not country:
         country = str(item.get("country_code", "")).upper()
     
-    if country == "FI":
+    if country in ["FI", "SE"]:
         return True
 
-    # 2. Kalbos atributų patikra (Lenkų)
-    for field in ["language", "language_id", "package_language", "original_language"]:
-        val = str(item.get(field, "")).lower()
-        if any(w in val for w in ["pl", "polish", "lenk", "18"]):
-            return True
+    # 2. Atmetame drabužius ir netinkamas kategorijas pagal URL
+    if is_clothing_or_invalid_category(item):
+        return True
 
+    # 3. Knygos kalbos patikra iš atributų (Jei priskirta lenkų kalba - atmetam)
     attributes = item.get("attributes", [])
     if isinstance(attributes, list):
         for attr in attributes:
             code = str(attr.get("code", "")).lower()
             name = str(attr.get("name", "")).lower()
-            answer = str(attr.get("answer", "")).lower()
-            value = str(attr.get("value", "")).lower()
-
-            if any(k in code or k in name for k in ["lang", "kalba", "book_language"]):
-                if any(p in answer or p in value for p in ["lenkų", "lenku", "polish", "pl", "18"]):
+            # Ieškome atributo susijusio su kalba
+            if "lang" in code or "kalba" in name or "język" in name or "jezyk" in name:
+                ans = str(attr.get("answer", "")).lower()
+                val = str(attr.get("value", "")).lower()
+                combined_val = f"{ans} {val}"
+                
+                # Jei atributo reikšmė yra lenkų kalba, atmetame
+                if any(p in combined_val for p in ["lenkų", "lenku", "polish", "polski", "pl", "suomių"]):
                     return True
 
-            attr_combined = f"{code} {name} {answer} {value}".lower()
-            if any(term in attr_combined for term in ["lenkų", "lenku", "język polski", "po polsku"]):
-                return True
-
-    # 3. Teksto patikra aprašyme ir pavadinime
-    title = str(item.get("title", ""))
-    description = str(item.get("description", ""))
-    full_text = f"{title} {description}".lower()
-
-    polish_letters = ["ł", "ść", "ż", "ź", "ę", "ą", "ń", "ó"]
-    if any(char in full_text for char in polish_letters):
+    title = str(item.get("title", "")).lower()
+    description = str(item.get("description", "")).lower()
+    
+    # 4. Pavadinimo tikrinimas (Ieškome išverstų pavadinimų)
+    # Jei pavadinime yra specifinės lenkiškos raidės, vadinasi knyga yra lenkų kalba
+    polish_chars_in_title = ["ł", "ś", "ć", "ż", "ź", "ę", "ą", "ń"]
+    if any(char in title for char in polish_chars_in_title):
         return True
 
-    polish_words = [
-        "wydawnictwo", "miękka oprawa", "twarda oprawa", "sprzedam",
-        "książka", "książki", "okładka", "stron", "po polsku",
-        "język polski", "seria ", "używana", "stan bardzo dobry",
-        "stan idealny", "jedno lato", "rywali", "zwrot akcji", "czytać"
-    ]
-    if any(word in full_text for word in polish_words):
+    # Jei pavadinime yra lenkiški knygų terminai
+    if any(word in title for word in ["książka", "ksiazka", "część", "czesc"]):
+        return True
+
+    # 5. Aprašymo tikrinimas
+    # Atmetame tik tada, jei aprašyme aiškiai parašyta, kad knyga lenkiška.
+    # (Nefiltruojame "stan idealny" ar kitų būklės aprašymų, kad išsaugotume angliškas knygas)
+    polish_language_phrases = ["po polsku", "język polski", "jezyk polski", "wersja polska", "wydanie polskie"]
+    if any(phrase in description for phrase in polish_language_phrases):
         return True
 
     return False
@@ -189,7 +206,7 @@ def check_vinted():
             "search_text": query,
             "per_page": 20,
             "order": "newest_first",
-            "catalog_ids": "117",
+            "catalog_ids": "117",  # Knygos / Pramogos kategorija
         }
 
         try:
@@ -206,6 +223,10 @@ def check_vinted():
                     continue
 
                 if is_invalid_item(item):
+                    seen_ids.add(item_id)
+                    continue
+                
+                if not has_strict_keyword_match(item, query):
                     seen_ids.add(item_id)
                     continue
 
