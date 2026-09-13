@@ -28,10 +28,12 @@ jobs:
         run: |
           python vinted_monitor.py
 
+      - name: Pull latest changes
+        run: |
+          git pull origin main
+
       - name: Commit and push seen items
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: 'Update seen items cache'
           file_pattern: 'seen_items.json'
-          skip_fetch: false
-          skip_dirty_check: false
