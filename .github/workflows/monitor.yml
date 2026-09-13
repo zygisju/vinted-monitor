@@ -27,7 +27,7 @@ jobs:
         run: |
           python vinted_monitor.py
 
-     - name: Commit and push seen items
+      - name: Commit and push seen items
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
