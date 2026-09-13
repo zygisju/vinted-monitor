@@ -8,11 +8,12 @@ on:
 jobs:
   run-monitor:
     runs-on: ubuntu-latest
+    concurrency:
+      group: monitor
+      cancel-in-progress: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -28,11 +29,9 @@ jobs:
           python vinted_monitor.py
 
       - name: Commit and push seen items
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git pull origin main --rebase || true
-          git add seen_items.json
-          git commit -m "Update seen items cache" || echo "No changes to commit"
-          git rebase origin/main || true
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'Update seen items cache'
+          file_pattern: 'seen_items.json'
+          skip_fetch: false
+          skip_dirty_check: false
