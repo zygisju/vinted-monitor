@@ -42,7 +42,8 @@ jobs:
 
       - name: Run script
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}  # <--- Šito trūko! Perduoda raktą į skriptą
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }} # <--- Pridėta Discord nuorodos integracija
         run: |
           python vinted_monitor.py
 
