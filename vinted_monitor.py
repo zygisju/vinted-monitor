@@ -53,15 +53,20 @@ def load_seen_ids():
   if os.path.exists(SEEN_FILE):
     try:
       with open(SEEN_FILE, "r", encoding="utf-8") as f:
-        return set(json.load(f))
-    except Exception:
+        data = json.load(f)
+        return set(str(x) for x in data)
+    except Exception as e:
+      print(f"Klaida skaitant {SEEN_FILE}: {e}")
       return set()
   return set()
 
 
 def save_seen_ids(seen_ids):
-  with open(SEEN_FILE, "w", encoding="utf-8") as f:
-    json.dump(list(seen_ids), f, ensure_ascii=False)
+  try:
+    with open(SEEN_FILE, "w", encoding="utf-8") as f:
+      json.dump(list(seen_ids), f, ensure_ascii=False, indent=2)
+  except Exception as e:
+    print(f"Klaida rašant {SEEN_FILE}: {e}")
 
 
 def send_discord_notification(item):
@@ -73,7 +78,6 @@ def send_discord_notification(item):
   user_info = item.get("user", {})
   seller_name = user_info.get("login", "Nežinomas pardavėjas")
 
-  # Nuotraukos URL jei yra
   photo_url = None
   photos = item.get("photos", [])
   if photos:
@@ -107,8 +111,51 @@ def is_bundle(title):
   return any(kw in t_lower for kw in bundle_keywords)
 
 
+def is_polish_content(item):
+  title = str(item.get("title", "")).lower()
+  description = str(item.get("description", "")).lower()
+  full_text = f"{title} {description}"
+
+  # Patikriname Vinted API kalbos lauką arba atributus
+  item_language = str(item.get("language", "")).lower()
+  if "pl" in item_language or "polish" in item_language:
+    return True
+
+  attributes = item.get("attributes", [])
+  if isinstance(attributes, list):
+    for attr in attributes:
+      code = str(attr.get("code", "")).lower()
+      value = str(attr.get("value", "")).lower()
+      if "lang" in code and ("pl" in value or "polish" in value or "lenk" in value):
+        return True
+
+  # Papildomi tipiniai lenkiški žodžiai ir galūnės (kadangi lenkų kalboje gausu spec. raidžių: ą, ć, ę, ł, ń, ó, ś, ź, ż)
+  polish_words = [
+      "język polski",
+      "po polsku",
+      "wydawnictwo",
+      "miękka oprawa",
+      "twarda oprawa",
+      "stan idealny",
+      "stan bardzo dobry",
+      "stron:",
+      "autor:",
+      "sprzedam",
+      "książka",
+      "książki",
+      "stan książki",
+      "wysyłka",
+      "okładka",
+  ]
+  if any(w in full_text for w in polish_words):
+    return True
+
+  return False
+
+
 def check_vinted():
   seen_ids = load_seen_ids()
+  initial_seen_count = len(seen_ids)
   session = requests.Session()
   headers = {
       "User-Agent": (
@@ -127,11 +174,10 @@ def check_vinted():
     return
 
   queries = AUTHORS + BOOKS
-  new_seen_count = 0
 
-  for query in queries[:5]:  # Pirmuoju metu tikriname dalį užklausų, kad neperkrautume
+  for query in queries:
     url = "https://www.vinted.lt/api/v2/catalog/items"
-    params = {"search_text": query, "per_page": 10, "order": "newest_first"}
+    params = {"search_text": query, "per_page": 20, "order": "newest_first"}
 
     try:
       resp = session.get(url, headers=headers, params=params, timeout=10)
@@ -142,16 +188,15 @@ def check_vinted():
       items = data.get("items", [])
 
       for item in items:
-        item_id = item.get("id")
+        item_id = str(item.get("id"))
         if not item_id or item_id in seen_ids:
           continue
 
-        # Saugus šalies kodų nuskaitymas (atmetame Suomiją 'FI')
+        # Atmetame Suomiją 'FI'
         user_data = item.get("user")
         country_code = None
         if isinstance(user_data, dict):
           country_code = user_data.get("countryIsoCode")
-
         if not country_code:
           country_code = item.get("country_code")
 
@@ -159,45 +204,12 @@ def check_vinted():
           seen_ids.add(item_id)
           continue
 
-        title = item.get("title", "")
-        description = item.get("description", "")
-        full_text = f"{title} {description}".lower()
-
-        # 1. Patikriname Vinted atributus/kalbą, jei API ją grąžina
-        attributes = item.get("attributes", [])
-        book_language_is_polish = False
-
-        for attr in attributes:
-          code = str(attr.get("code", "")).lower()
-          value = str(attr.get("value", "")).lower()
-          if "lang" in code and (
-              "pl" in value or "polish" in value or "lenk" in value
-          ):
-            book_language_is_polish = True
-
-        # 2. Tikriname teksto turinį (ar skelbimas parašytas lenkiškai)
-        polish_phrases = [
-            "język polski",
-            "po polsku",
-            "wydawnictwo",
-            "miękka oprawa",
-            "twarda oprawa",
-            "stan idealny",
-            "stan bardzo dobry",
-            "stron:",
-            "autor:",
-            "sprzedam",
-            "książka",
-            "stan książki",
-        ]
-
-        is_polish_text = any(phrase in full_text for phrase in polish_phrases)
-
-        # Jei knyga lenkų kalba arba pats skelbimas akivaizdžiai lenkiškas – praleidžiame
-        if book_language_is_polish or is_polish_text:
+        # Jei lenkiškas turinys / kalba – ignoruojame
+        if is_polish_content(item):
           seen_ids.add(item_id)
           continue
 
+        title = item.get("title", "")
         price_info = item.get("price", {})
         try:
           price = float(price_info.get("amount", 0))
@@ -205,22 +217,24 @@ def check_vinted():
           price = 999.0
 
         bundle_flag = is_bundle(title)
-        # Kainų taisyklė: rinkiniui <= 15 EUR, pavienei knygai <= 5 EUR
         max_allowed_price = 15.0 if bundle_flag else 5.0
 
         if price <= max_allowed_price:
           send_discord_notification(item)
           print(f"Rasta ir išsiųsta: {title} ({price} EUR)")
 
-        seen_ids.add(item_id)
-        new_seen_count += 1
+        seen_id_str = str(item_id)
+        seen_ids.add(seen_id_str)
 
-      time.sleep(random.uniform(2.0, 4.0))
+      time.sleep(random.uniform(1.5, 3.0))
 
     except Exception as e:
       print(f"Klaida ieškant '{query}': {e}")
 
   save_seen_ids(seen_ids)
+  print(
+      f"Baigta. Viso matytų ID prieš: {initial_seen_count}, po: {len(seen_ids)}"
+  )
 
 
 if __name__ == "__main__":
