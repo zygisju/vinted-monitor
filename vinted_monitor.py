@@ -146,15 +146,58 @@ def check_vinted():
         if not item_id or item_id in seen_ids:
           continue
 
-        # Patikriname šalį (atmetame Suomiją 'FI')
-        country_code = item.get("user", {}).get("countryIsoCode") or item.get(
-            "country_code"
-        )
+        # Saugus šalies kodų nuskaitymas (atmetame Suomiją 'FI')
+        user_data = item.get("user")
+        country_code = None
+        if isinstance(user_data, dict):
+          country_code = user_data.get("countryIsoCode")
+
+        if not country_code:
+          country_code = item.get("country_code")
+
         if country_code == "FI":
           seen_ids.add(item_id)
           continue
 
         title = item.get("title", "")
+        description = item.get("description", "")
+        full_text = f"{title} {description}".lower()
+
+        # 1. Patikriname Vinted atributus/kalbą, jei API ją grąžina
+        attributes = item.get("attributes", [])
+        book_language_is_polish = False
+
+        for attr in attributes:
+          code = str(attr.get("code", "")).lower()
+          value = str(attr.get("value", "")).lower()
+          if "lang" in code and (
+              "pl" in value or "polish" in value or "lenk" in value
+          ):
+            book_language_is_polish = True
+
+        # 2. Tikriname teksto turinį (ar skelbimas parašytas lenkiškai)
+        polish_phrases = [
+            "język polski",
+            "po polsku",
+            "wydawnictwo",
+            "miękka oprawa",
+            "twarda oprawa",
+            "stan idealny",
+            "stan bardzo dobry",
+            "stron:",
+            "autor:",
+            "sprzedam",
+            "książka",
+            "stan książki",
+        ]
+
+        is_polish_text = any(phrase in full_text for phrase in polish_phrases)
+
+        # Jei knyga lenkų kalba arba pats skelbimas akivaizdžiai lenkiškas – praleidžiame
+        if book_language_is_polish or is_polish_text:
+          seen_ids.add(item_id)
+          continue
+
         price_info = item.get("price", {})
         try:
           price = float(price_info.get("amount", 0))
