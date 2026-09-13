@@ -35,4 +35,4 @@ jobs:
           git pull origin main --rebase || true
           git add seen_items.json
           git commit -m "Update seen items cache" || echo "No changes to commit"
-          git push origin main
+          git rebase origin/main || true
