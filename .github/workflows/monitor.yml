@@ -41,6 +41,8 @@ jobs:
           git pull --rebase origin main || true
 
       - name: Run script
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}  # <--- Šito trūko! Perduoda raktą į skriptą
         run: |
           python vinted_monitor.py
 
