@@ -72,9 +72,9 @@ def save_seen_ids(seen_ids):
 
 
 def is_valid_book_cover_with_ai(image_url, query_title):
-  """Patikrina per Gemini AI, ar nuotraukoje tikrai fizinė knyga ir ar ji nėra lenkiška."""
+  """Patikrina per Gemini AI, ar nuotraukoje tikrai fizinė knyga ir ar ji yra tik EN/LT kalba."""
   if not gemini_client or not image_url:
-    return True  # Jei nėra API rakto, praleidžiame be stabdymo
+    return True
 
   prompt = (
       f"Tu esi asistentas, kuris filtruoja Vinted skelbimus. "
@@ -82,9 +82,9 @@ def is_valid_book_cover_with_ai(image_url, query_title):
       f"Pažiūrėk į šią nuotrauką pagal nuorodą: {image_url}. "
       f"Tavo užduotis yra dvejopa: "
       f"1. Įsitikinti, kad nuotraukoje matoma fizinė knyga (ne figūrėlė, ne žaislas, ne drabužis, ne plakatas). "
-      f"2. Perskaityti ant knygos viršelio esantį tekstą. Tinka tik angliškos arba lietuviškos knygos. Jei ant viršelio matomas lenkiškas tekstas (pvz., pavadinimas išverstas į lenkų kalbą), knygą reikia atmesti. "
-      f"Atsakyk TIK žodžiu 'TAIP', jei tai yra tikra knyga ir ant jos viršelio NĖRA lenkiško teksto. "
-      f"Atsakyk TIK žodžiu 'NE', jei tai ne knyga ARBA jei tekstas ant viršelio yra bent iš dalies lenkiškas."
+      f"2. Perskaityti ant knygos viršelio esantį tekstą ir nustatyti jo kalbą. Tinka TIK anglų arba lietuvių kalbos. Jei viršelyje matomas tekstas yra bet kokia kita kalba (suomių, lenkų, vokiečių, ispanų ir t.t.), knygą privalai atmesti. "
+      f"Atsakyk TIK žodžiu 'TAIP', jei tai yra tikra knyga ir tekstas ant jos viršelio yra TIK anglų arba lietuvių kalba. "
+      f"Atsakyk TIK žodžiu 'NE', jei tai ne knyga ARBA jei tekstas ant viršelio yra bet kokia kita kalba nei anglų ar lietuvių."
   )
 
   try:
