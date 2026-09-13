@@ -78,17 +78,17 @@ def is_valid_book_cover_with_ai(image_url, query_title):
   """Patikrina per Gemini AI, ar nuotraukoje tikrai fizinė knyga ir ar ji yra tik EN/LT kalba."""
   if not gemini_client:
     print("DEBUG: Nėra gemini_client!")
-    return True
+    return False
   if not image_url:
     print("DEBUG: Nėra image_url!")
-    return True
+    return False
 
   try:
     headers = {"User-Agent": "Mozilla/5.0"}
     img_resp = requests.get(image_url, headers=headers, timeout=10)
     print(f"DEBUG: Paveiksliuko atsisiuntimo statusas: {img_resp.status_code}")
     if img_resp.status_code != 200:
-      return True
+      return False
     img_bytes = img_resp.content
 
     prompt = (
@@ -115,7 +115,7 @@ def is_valid_book_cover_with_ai(image_url, query_title):
 
   except Exception as e:
     print(f"AI Vision klaida: {e}")
-    return True  # Laikinai grąžinam True, kad matytum ar knygos praeina
+    return False  # Saugiau: įvykus klaidai nesiunčiame į Discord
 
 
 def send_discord_notification(item, item_type="knyga"):
@@ -185,9 +185,23 @@ def is_invalid_book_item(item):
   full_text = f"{title} {description}"
 
   non_book_keywords = [
-      "figurėlė", "figure", "figūra", "funko", "pop!", "plakatas", "poster", 
-      "marškinėliai", "t-shirt", "hoodie", "džemperis", "lipdukas", "sticker", 
-      "pakabukas", "keychain", "merch", "paveikslas"
+      "figurėlė",
+      "figure",
+      "figūra",
+      "funko",
+      "pop!",
+      "plakatas",
+      "poster",
+      "marškinėliai",
+      "t-shirt",
+      "hoodie",
+      "džemperis",
+      "lipdukas",
+      "sticker",
+      "pakabukas",
+      "keychain",
+      "merch",
+      "paveikslas",
   ]
   if any(kw in full_text for kw in non_book_keywords):
     return True
@@ -212,17 +226,38 @@ def is_invalid_book_item(item):
         ans = str(attr.get("answer", "")).lower()
         val = str(attr.get("value", "")).lower()
         combined_val = f"{ans} {val}"
-        if any(p in combined_val for p in ["lenkų", "lenku", "polish", "polski", "pl", "suomių", "finnish"]):
+        if any(
+            p in combined_val
+            for p in ["lenkų", "lenku", "polish", "polski", "pl", "suomių", "finnish"]
+        ):
           return True
 
   polish_chars_in_title = ["ł", "ś", "ć", "ż", "ź", "ę", "ą", "ń"]
   if any(char in title for char in polish_chars_in_title):
     return True
 
+  polish_blacklist = [
+      "napastnik",
+      "miłość",
+      "tylko",
+      "dziewczyna",
+      "chłopak",
+      "obietnica",
+      "czterystu",
+  ]
+  if any(word in title for word in polish_blacklist):
+    return True
+
   if any(word in title for word in ["książka", "ksiazka", "część", "czesc"]):
     return True
 
-  polish_language_phrases = ["po polsku", "język polski", "jezyk polski", "wersja polska", "wydanie polskie"]
+  polish_language_phrases = [
+      "po polsku",
+      "język polski",
+      "jezyk polski",
+      "wersja polska",
+      "wydanie polskie",
+  ]
   if any(phrase in description for phrase in polish_language_phrases):
     return True
 
