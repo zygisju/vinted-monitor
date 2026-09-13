@@ -6,9 +6,7 @@ import requests
 from google import genai
 from google.genai import types
 
-DISCORD_WEBHOOK_URL = (
-    "https://discord.com/api/webhooks/1548670048107892789/jC0ZzBWmwQ3kzVV25F0QbiaAd_gEd6OyO7vJLKPUjaTKrz78pEeSPnXij5rEIqoeWorr"
-)
+DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
 # Inicijuojame Gemini klientą su API raktu iš GitHub Secrets
 gemini_api_key = os.environ.get("GEMINI_API_KEY")
