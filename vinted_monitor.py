@@ -4,6 +4,7 @@ import random
 import time
 import requests
 from google import genai
+from google.genai import types
 
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1548670048107892789/jC0ZzBWmwQ3kzVV25F0QbiaAd_gEd6OyO7vJLKPUjaTKrz78pEeSPnXij5rEIqoeWorr"
 
@@ -76,26 +77,36 @@ def is_valid_book_cover_with_ai(image_url, query_title):
   if not gemini_client or not image_url:
     return True
 
-  prompt = (
-      f"Tu esi asistentas, kuris filtruoja Vinted skelbimus. "
-      f"Ieškoma knyga arba autorius: '{query_title}'. "
-      f"Pažiūrėk į šią nuotrauką pagal nuorodą: {image_url}. "
-      f"Tavo užduotis yra dvejopa: "
-      f"1. Įsitikinti, kad nuotraukoje matoma fizinė knyga (ne figūrėlė, ne žaislas, ne drabužis, ne plakatas). "
-      f"2. Perskaityti ant knygos viršelio esantį tekstą ir nustatyti jo kalbą. Tinka TIK anglų arba lietuvių kalbos. Jei viršelyje matomas tekstas yra bet kokia kita kalba (suomių, lenkų, vokiečių, ispanų ir t.t.), knygą privalai atmesti. "
-      f"Atsakyk TIK žodžiu 'TAIP', jei tai yra tikra knyga ir tekstas ant jos viršelio yra TIK anglų arba lietuvių kalba. "
-      f"Atsakyk TIK žodžiu 'NE', jei tai ne knyga ARBA jei tekstas ant viršelio yra bet kokia kita kalba nei anglų ar lietuvių."
-  )
-
   try:
+    img_resp = requests.get(image_url, timeout=10)
+    if img_resp.status_code != 200:
+      return True
+    img_bytes = img_resp.content
+
+    prompt = (
+        f"Tu esi asistentas, kuris filtruoja Vinted skelbimus. "
+        f"Ieškoma knyga arba autorius: '{query_title}'. "
+        f"Pažiūrėk į šią nuotrauką. "
+        f"Tavo užduotis yra dvejopa: "
+        f"1. Įsitikinti, kad nuotraukoje matoma fizinė knyga (ne figūrėlė, ne žaislas, ne drabužis, ne plakatas). "
+        f"2. Perskaityti ant knygos viršelio esantį tekstą ir nustatyti jo kalbą. Tinka TIK anglų arba lietuvių kalbos. Jei viršelyje matomas tekstas yra bet kokia kita kalba (suomių, lenkų, vokiečių, ispanų ir t.t.), knygą privalai atmesti. "
+        f"Atsakyk TIK žodžiu 'TAIP', jei tai yra tikra knyga ir tekstas ant jos viršelio yra TIK anglų arba lietuvių kalba. "
+        f"Atsakyk TIK žodžiu 'NE', jei tai ne knyga ARBA jei tekstas ant viršelio yra bet kokia kita kalba nei anglų ar lietuvių."
+    )
+
     response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash", contents=prompt
+        model="gemini-2.5-flash",
+        contents=[
+            types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+            prompt,
+        ],
     )
     answer = response.text.strip().upper()
     return "TAIP" in answer
+
   except Exception as e:
     print(f"AI Vision klaida: {e}")
-    return True
+    return False
 
 
 def send_discord_notification(item, item_type="knyga"):
@@ -254,7 +265,7 @@ def check_vinted():
         photos = item.get("photos", [])
         photo_url = photos[0].get("url") if photos else None
         if photo_url and not is_valid_book_cover_with_ai(photo_url, query):
-          print(f"AI atmetė (ne knyga arba lenkiška): {item.get('title')}")
+          print(f"AI atmetė (ne knyga arba netinkama kalba): {item.get('title')}")
           seen_ids.add(item_id)
           continue
 
